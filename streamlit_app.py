@@ -52,10 +52,13 @@ def _build_retrieval_queries(*args, **kwargs):
     return build_retrieval_queries(*args, **kwargs)
 
 def _retrieve_support_docs(*args, **kwargs):
-    """Lazy import for RAG retrieval."""
+    """Lazy import for RAG retrieval. Returns empty list if ChromaDB not available."""
     try:
         from app.rag_orchestrator import retrieve_support_docs
         return retrieve_support_docs(*args, **kwargs)
+    except ImportError as e:
+        logger.warning(f"RAG not available (ChromaDB/sentence-transformers not installed): {e}")
+        return []  # Return empty list if dependencies missing
     except Exception as e:
         logger.warning(f"RAG retrieval failed: {e}")
         return []  # Return empty list if RAG fails

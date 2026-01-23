@@ -1,3 +1,15 @@
+---
+title: MaintAI - Video Repair Assistant
+emoji: 🔧
+colorFrom: blue
+colorTo: green
+sdk: streamlit
+sdk_version: "1.28.0"
+python_version: "3.10"
+app_file: streamlit_app.py
+pinned: false
+---
+
 ## Video Understanding (Gemini) — Home Appliances Support with RAG
 
 This repo provides a **FastAPI** service that accepts a **video upload** or a **video URL**, analyzes it with **Gemini**, retrieves relevant documentation from **Chroma DB** (using BGE-M3 embeddings), and returns a grounded technical answer with citations.
