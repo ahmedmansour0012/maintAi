@@ -1,0 +1,24 @@
+# Requirements for PythonAnywhere deployment
+# Some packages are adjusted for compatibility
+
+fastapi==0.115.6
+uvicorn==0.34.0
+python-multipart==0.0.20
+pydantic==2.10.4
+httpx==0.28.1
+google-genai==0.8.0
+python-dotenv==1.0.1
+pypdf==5.1.0
+tiktoken==0.10.0
+elevenlabs>=1.0.0
+
+# WSGI adapter for FastAPI on PythonAnywhere
+a2wsgi>=1.10.0
+
+# ChromaDB and sentence-transformers are heavy - may need paid tier
+# Uncomment if you have a paid account:
+# chromadb==0.5.20
+# sentence-transformers==3.3.1
+
+# Note: Streamlit cannot run on PythonAnywhere web apps
+# It requires a separate process. Use the FastAPI endpoints instead.
