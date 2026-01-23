@@ -14,23 +14,88 @@ import httpx
 import streamlit as st
 import streamlit.components.v1 as components
 
-from app.gemini_video_understanding import GeminiAPIError, analyze_video_with_gemini
-from app.question_generation import (
-    build_retrieval_queries,
-    extract_user_questions,
-    generate_clarifying_questions,
-)
-from app.rag_orchestrator import (
-    answer_with_gemini,
-    compose_grounded_prompt,
-    retrieve_support_docs,
-)
-from app.settings import get_settings
-from app.video_io import VideoDownloadError, VideoTooLargeError, download_video
-from app.elevenlabs_tts import ElevenLabsTTSError, text_to_speech_wav
-from app.elevenlabs_agent import ElevenLabsAgentError
-
+# Configure logging
 logger = logging.getLogger(__name__)
+
+# Lazy imports to avoid loading heavy modules at startup
+# These will be imported when first needed
+_lazy_modules = {}
+
+def _get_settings():
+    """Lazy import for settings."""
+    from app.settings import get_settings
+    return get_settings()
+
+def _analyze_video_with_gemini(*args, **kwargs):
+    """Lazy import for Gemini video analysis."""
+    from app.gemini_video_understanding import analyze_video_with_gemini
+    return analyze_video_with_gemini(*args, **kwargs)
+
+def _get_gemini_api_error():
+    """Lazy import for GeminiAPIError."""
+    from app.gemini_video_understanding import GeminiAPIError
+    return GeminiAPIError
+
+def _extract_user_questions(*args, **kwargs):
+    """Lazy import for question extraction."""
+    from app.question_generation import extract_user_questions
+    return extract_user_questions(*args, **kwargs)
+
+def _generate_clarifying_questions(*args, **kwargs):
+    """Lazy import for clarifying questions."""
+    from app.question_generation import generate_clarifying_questions
+    return generate_clarifying_questions(*args, **kwargs)
+
+def _build_retrieval_queries(*args, **kwargs):
+    """Lazy import for retrieval queries."""
+    from app.question_generation import build_retrieval_queries
+    return build_retrieval_queries(*args, **kwargs)
+
+def _retrieve_support_docs(*args, **kwargs):
+    """Lazy import for RAG retrieval."""
+    try:
+        from app.rag_orchestrator import retrieve_support_docs
+        return retrieve_support_docs(*args, **kwargs)
+    except Exception as e:
+        logger.warning(f"RAG retrieval failed: {e}")
+        return []  # Return empty list if RAG fails
+
+def _compose_grounded_prompt(*args, **kwargs):
+    """Lazy import for grounded prompt composition."""
+    from app.rag_orchestrator import compose_grounded_prompt
+    return compose_grounded_prompt(*args, **kwargs)
+
+def _answer_with_gemini(*args, **kwargs):
+    """Lazy import for Gemini answering."""
+    from app.rag_orchestrator import answer_with_gemini
+    return answer_with_gemini(*args, **kwargs)
+
+def _text_to_speech_wav(*args, **kwargs):
+    """Lazy import for TTS."""
+    from app.elevenlabs_tts import text_to_speech_wav
+    return text_to_speech_wav(*args, **kwargs)
+
+def _get_elevenlabs_tts_error():
+    """Lazy import for ElevenLabsTTSError."""
+    from app.elevenlabs_tts import ElevenLabsTTSError
+    return ElevenLabsTTSError
+
+def _get_video_errors():
+    """Lazy import for video errors."""
+    from app.video_io import VideoDownloadError, VideoTooLargeError
+    return VideoDownloadError, VideoTooLargeError
+
+def _download_video(*args, **kwargs):
+    """Lazy import for video download."""
+    from app.video_io import download_video
+    return download_video(*args, **kwargs)
+
+def _get_elevenlabs_agent_error():
+    """Lazy import for ElevenLabsAgentError."""
+    from app.elevenlabs_agent import ElevenLabsAgentError
+    return ElevenLabsAgentError
+
+# Aliases for compatibility (these are now handled via lazy imports)
 
 # Page configuration
 st.set_page_config(
@@ -127,7 +192,7 @@ def run_async(coro):
 
 def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, user_hint: Optional[str] = None, part_number: Optional[str] = None, is_image: bool = False):
     """Process video/image through the full assistance pipeline."""
-    settings = get_settings()
+    settings = _get_settings()
     
     if not settings.gemini_api_key:
         raise ValueError("Missing GEMINI_API_KEY. Please set it in your .env file or environment variables.")
@@ -136,7 +201,7 @@ def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, 
     media_type = "image" if is_image else "video"
     with st.status(f"🎥 Analyzing {media_type} with AI...", expanded=True) as status:
         status.update(label=f"🎥 Analyzing {media_type} with Gemini AI...", state="running")
-        result = analyze_video_with_gemini(
+        result = _analyze_video_with_gemini(
             api_key=settings.gemini_api_key,
             model=settings.gemini_model,
             video_bytes=media_bytes,
@@ -152,8 +217,8 @@ def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, 
     # Step 2: Question generation
     with st.status("❓ Generating questions...", expanded=False) as status:
         status.update(label="❓ Extracting questions from transcript...", state="running")
-        user_questions = extract_user_questions(transcript)
-        clarifying_questions = generate_clarifying_questions(
+        user_questions = _extract_user_questions(transcript)
+        clarifying_questions = _generate_clarifying_questions(
             appliance_type=analysis.get("appliance_type"),
             brand_or_model=analysis.get("brand_or_model"),
             issue_summary=analysis.get("issue_summary"),
@@ -164,7 +229,7 @@ def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, 
     # Step 3: Retrieval
     with st.status("📚 Retrieving relevant documentation...", expanded=False) as status:
         status.update(label="📚 Searching knowledge base...", state="running")
-        queries = build_retrieval_queries(
+        queries = _build_retrieval_queries(
             appliance_type=analysis.get("appliance_type"),
             brand_or_model=analysis.get("brand_or_model"),
             issue_summary=analysis.get("issue_summary"),
@@ -172,13 +237,13 @@ def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, 
         )
         # Use part_number from user input if provided, otherwise from video analysis
         effective_part_number = part_number if part_number and part_number.strip() else analysis.get("part_number")
-        citations = retrieve_support_docs(queries, part_number=effective_part_number)
+        citations = _retrieve_support_docs(queries, part_number=effective_part_number)
         status.update(label=f"✅ Found {len(citations)} relevant sources", state="complete")
     
     # Step 4: Generate grounded answer
     with st.status("💡 Generating repair instructions...", expanded=False) as status:
         status.update(label="💡 Generating detailed repair instructions with citations...", state="running")
-        grounded_prompt = compose_grounded_prompt(
+        grounded_prompt = _compose_grounded_prompt(
             transcript=transcript,
             analysis=analysis,
             clarifying_questions=clarifying_questions,
@@ -186,7 +251,7 @@ def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, 
             language=language,
             part_number=effective_part_number,
         )
-        answer = answer_with_gemini(
+        answer = _answer_with_gemini(
             api_key=settings.gemini_api_key,
             model=settings.gemini_answer_model,
             prompt=grounded_prompt,
@@ -202,7 +267,7 @@ def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, 
             try:
                 answer_text = answer.get("text", "")
                 if answer_text:
-                    audio_bytes, audio_format = text_to_speech_wav(
+                    audio_bytes, audio_format = _text_to_speech_wav(
                         text=answer_text,
                         api_key=settings.elevenlabs_api_key,
                         language=language,
@@ -210,9 +275,12 @@ def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, 
                     status.update(label="✅ Audio generated", state="complete")
                 else:
                     status.update(label="⚠️ No text to convert", state="complete")
-            except ElevenLabsTTSError as e:
-                status.update(label=f"⚠️ Audio generation failed: {str(e)}", state="error")
-                logger.warning(f"ElevenLabs TTS error: {str(e)}")
+            except Exception as e:
+                if "ElevenLabsTTSError" in type(e).__name__:
+                    status.update(label=f"⚠️ Audio generation failed: {str(e)}", state="error")
+                    logger.warning(f"ElevenLabs TTS error: {str(e)}")
+                else:
+                    raise
             except Exception as e:
                 status.update(label=f"⚠️ Audio generation error: {str(e)}", state="error")
                 logger.warning(f"Unexpected TTS error: {str(e)}")
@@ -437,7 +505,7 @@ def main():
             st.divider()
             if st.button("🚀 Analyze Video", type="primary", use_container_width=True, key="analyze_media"):
                 try:
-                    settings = get_settings()
+                    settings = _get_settings()
 
                     # Validate media size
                     max_size = settings.max_video_bytes
@@ -471,15 +539,17 @@ def main():
                 except ValueError as e:
                     st.error(f"Configuration error: {str(e)}")
                     st.info("Please check your .env file or environment variables for GEMINI_API_KEY")
-                except VideoDownloadError as e:
-                    st.error(f"Video processing error: {str(e)}")
-                except GeminiAPIError as e:
-                    st.error(f"AI API error: {str(e)}")
-                    if e.retry_after_seconds:
-                        st.info(f"Please retry after {e.retry_after_seconds} seconds")
                 except Exception as e:
-                    st.error(f"Unexpected error: {str(e)}")
-                    st.exception(e)
+                    error_type = type(e).__name__
+                    if "VideoDownloadError" in error_type:
+                        st.error(f"Video processing error: {str(e)}")
+                    elif "GeminiAPIError" in error_type:
+                        st.error(f"AI API error: {str(e)}")
+                        if hasattr(e, 'retry_after_seconds') and e.retry_after_seconds:
+                            st.info(f"Please retry after {e.retry_after_seconds} seconds")
+                    else:
+                        st.error(f"Unexpected error: {str(e)}")
+                        st.exception(e)
         else:
             st.info("👆 Please upload a video file to begin analysis")
 
@@ -494,7 +564,7 @@ def main():
                 st.markdown("---")
                 st.subheader("🎤 Voice Conversation with AI Agent")
 
-                settings = get_settings()
+                settings = _get_settings()
                 if settings.elevenlabs_agent_id:
                     # Build runtime dynamic variable "video_context" from the Gemini analysis
                     from app.elevenlabs_agent import build_video_context_text
@@ -525,7 +595,7 @@ def main():
                                     language=language,
                                 )
                                 st.session_state.agent_prompt_template_updated = True
-                            except ElevenLabsAgentError as e:
+                            except Exception as e:
                                 logger.warning("Failed to update agent prompt template: %s", str(e))
                                 st.warning(
                                     "⚠️ Couldn't sync Agent prompt template automatically. "
@@ -592,24 +662,24 @@ def main():
         
         if video_url:
             try:
-                settings = get_settings()
+                settings = _get_settings()
                 with st.spinner("Downloading video..."):
                     payload = run_async(
-                        download_video(video_url, max_bytes=settings.max_video_bytes)
+                        _download_video(video_url, max_bytes=settings.max_video_bytes)
                     )
                     media_bytes = payload.data
                     mime_type = payload.mime_type
                     is_image = False
                     st.success(f"Video downloaded successfully ({len(media_bytes) / 1024 / 1024:.2f} MB)")
                     st.video(media_bytes)
-            except VideoTooLargeError as e:
-                st.error(f"Video too large: {str(e)}")
-                media_bytes = None
-            except VideoDownloadError as e:
-                st.error(f"Failed to download video: {str(e)}")
-                media_bytes = None
             except Exception as e:
-                st.error(f"Error downloading video: {str(e)}")
+                error_type = type(e).__name__
+                if "VideoTooLargeError" in error_type:
+                    st.error(f"Video too large: {str(e)}")
+                elif "VideoDownloadError" in error_type:
+                    st.error(f"Failed to download video: {str(e)}")
+                else:
+                    st.error(f"Error downloading video: {str(e)}")
                 media_bytes = None
     
     # Knowledge Base Management Tab
@@ -617,7 +687,7 @@ def main():
         st.header("📚 Knowledge Base Management")
         st.markdown("**Manage documents in ElevenLabs Knowledge Base with part numbers.**")
         
-        settings = get_settings()
+        settings = _get_settings()
         
         # Import ElevenLabs functions directly (no need for FastAPI backend)
         from app.elevenlabs_knowledge_base import (
