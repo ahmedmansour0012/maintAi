@@ -618,7 +618,15 @@ def main():
         st.markdown("**Manage documents in ElevenLabs Knowledge Base with part numbers.**")
         
         settings = get_settings()
-        api_url = "http://localhost:8000"  # Default FastAPI URL
+        
+        # Import ElevenLabs functions directly (no need for FastAPI backend)
+        from app.elevenlabs_knowledge_base import (
+            list_documents,
+            delete_document,
+            upload_document_with_part_number,
+            assign_knowledge_base_to_agent,
+            create_or_get_folder_by_part_number,
+        )
         
         if not settings.elevenlabs_api_key:
             st.error("⚠️ Missing ELEVENLABS_API_KEY. Please set it in your .env file.")
@@ -658,33 +666,30 @@ def main():
                     else:
                         with st.spinner("Assigning Knowledge Base to Agent..."):
                             try:
-                                response = httpx.post(
-                                    f"{api_url}/knowledge-base/assign-to-agent",
-                                    timeout=30.0,
+                                api_key = settings.get_elevenlabs_api_key_for_write()
+                                result = assign_knowledge_base_to_agent(
+                                    api_key=api_key,
+                                    agent_id=settings.elevenlabs_agent_id,
+                                    knowledge_base_id=settings.elevenlabs_knowledge_base_id,
                                 )
-                                if response.status_code == 200:
-                                    result = response.json()
-                                    assignment = result.get("assignment", {})
-                                    status = assignment.get("status", "unknown")
-                                    
-                                    if status == "success":
-                                        st.success("✅ Knowledge Base assigned to Agent successfully!")
-                                    elif status == "configured":
-                                        st.info("ℹ️ Agent configuration checked. Knowledge Base should be set in Agent settings.")
-                                        if assignment.get("note"):
-                                            st.markdown(assignment.get("note"))
-                                    elif status == "manual_required":
-                                        st.warning("⚠️ Manual assignment required via Dashboard")
-                                        if assignment.get("note"):
-                                            st.markdown(assignment.get("note"))
-                                        if assignment.get("dashboard_url"):
-                                            st.markdown(f"🔗 **Dashboard Link:** [{assignment.get('dashboard_url')}]({assignment.get('dashboard_url')})")
-                                    else:
-                                        st.warning(f"⚠️ Assignment status: {status}")
-                                        if assignment.get("note"):
-                                            st.markdown(assignment.get("note"))
+                                status = result.get("status", "unknown")
+                                
+                                if status == "success":
+                                    st.success("✅ Knowledge Base assigned to Agent successfully!")
+                                elif status == "configured":
+                                    st.info("ℹ️ Agent configuration checked. Knowledge Base should be set in Agent settings.")
+                                    if result.get("note"):
+                                        st.markdown(result.get("note"))
+                                elif status == "manual_required":
+                                    st.warning("⚠️ Manual assignment required via Dashboard")
+                                    if result.get("note"):
+                                        st.markdown(result.get("note"))
+                                    if result.get("dashboard_url"):
+                                        st.markdown(f"🔗 **Dashboard Link:** [{result.get('dashboard_url')}]({result.get('dashboard_url')})")
                                 else:
-                                    st.error(f"Failed to assign Knowledge Base: {response.text}")
+                                    st.warning(f"⚠️ Assignment status: {status}")
+                                    if result.get("note"):
+                                        st.markdown(result.get("note"))
                             except Exception as e:
                                 st.error(f"Error assigning Knowledge Base: {str(e)}")
             
@@ -711,23 +716,15 @@ def main():
             if st.button("🔄 Refresh Documents List", type="secondary"):
                 with st.spinner("Loading documents..."):
                     try:
-                        params = {}
-                        if folder_name:
-                            params["folder_name"] = folder_name
-                        if parent_folder_id:
-                            params["parent_folder_id"] = parent_folder_id
-                        
-                        response = httpx.get(
-                            f"{api_url}/knowledge-base/documents",
-                            params=params,
-                            timeout=30.0,
+                        api_key = settings.get_elevenlabs_api_key_for_read()
+                        documents = list_documents(
+                            api_key=api_key,
+                            knowledge_base_id=settings.elevenlabs_knowledge_base_id,
+                            parent_folder_id=parent_folder_id if parent_folder_id else None,
+                            folder_name=folder_name if folder_name else None,
                         )
-                        if response.status_code == 200:
-                            result = response.json()
-                            st.session_state.kb_documents = result.get("documents", [])
-                            st.success(f"✅ Loaded {result.get('count', 0)} documents")
-                        else:
-                            st.error(f"Failed to load documents: {response.text}")
+                        st.session_state.kb_documents = documents
+                        st.success(f"✅ Loaded {len(documents)} documents")
                     except Exception as e:
                         st.error(f"Error loading documents: {str(e)}")
             
@@ -748,21 +745,20 @@ def main():
                             if st.button("🗑️ Delete", key=f"delete_{doc.get('document_id')}", type="secondary"):
                                 with st.spinner("Deleting document..."):
                                     try:
-                                        response = httpx.delete(
-                                            f"{api_url}/knowledge-base/documents/{doc.get('document_id')}",
-                                            timeout=30.0,
+                                        api_key = settings.get_elevenlabs_api_key_for_write()
+                                        delete_document(
+                                            api_key=api_key,
+                                            knowledge_base_id=settings.elevenlabs_knowledge_base_id,
+                                            document_id=doc.get('document_id'),
                                         )
-                                        if response.status_code == 200:
-                                            st.success("✅ Document deleted")
-                                            # Refresh list
-                                            if "kb_documents" in st.session_state:
-                                                st.session_state.kb_documents = [
-                                                    d for d in st.session_state.kb_documents
-                                                    if d.get('document_id') != doc.get('document_id')
-                                                ]
-                                            st.rerun()
-                                        else:
-                                            st.error(f"Failed to delete: {response.text}")
+                                        st.success("✅ Document deleted")
+                                        # Refresh list
+                                        if "kb_documents" in st.session_state:
+                                            st.session_state.kb_documents = [
+                                                d for d in st.session_state.kb_documents
+                                                if d.get('document_id') != doc.get('document_id')
+                                            ]
+                                        st.rerun()
                                     except Exception as e:
                                         st.error(f"Error deleting document: {str(e)}")
                         st.divider()
@@ -815,79 +811,88 @@ def main():
                             st.error(f"⚠️ Number of custom names ({len(custom_names_list)}) must match number of files ({len(uploaded_docs)})")
                             st.stop()
                     
-                    # Prepare files for upload
-                    files = []
-                    for doc in uploaded_docs:
-                        doc.seek(0)  # Reset file pointer
-                        files.append(("files", (doc.name, doc.read(), doc.type)))
-                    
-                    # Prepare form data
-                    data = {
-                        "part_number": doc_part_number,
-                    }
-                    if custom_names_list:
-                        data["custom_names"] = ",".join(custom_names_list)
-                    
                     # Upload with progress
                     progress_bar = st.progress(0)
                     status_text = st.empty()
                     
                     try:
-                        status_text.text(f"Uploading {len(uploaded_docs)} file(s)...")
+                        api_key = settings.get_elevenlabs_api_key_for_write()
+                        kb_id = settings.elevenlabs_knowledge_base_id
+                        
+                        # Create or get folder for this part number
+                        status_text.text("Creating folder...")
+                        folder_id = create_or_get_folder_by_part_number(api_key, doc_part_number)
                         progress_bar.progress(0.1)
                         
-                        response = httpx.post(
-                            f"{api_url}/knowledge-base/documents/batch",
-                            files=files,
-                            data=data,
-                            timeout=300.0,  # Longer timeout for multiple files
-                        )
+                        # Upload all files
+                        results = []
+                        failed_uploads = []
+                        total_files = len(uploaded_docs)
                         
-                        progress_bar.progress(0.9)
+                        for idx, doc in enumerate(uploaded_docs):
+                            try:
+                                status_text.text(f"Uploading {doc.name}... ({idx + 1}/{total_files})")
+                                doc.seek(0)
+                                file_bytes = doc.read()
+                                mime_type = doc.type
+                                custom_name = custom_names_list[idx] if custom_names_list else None
+                                
+                                result = upload_document_with_part_number(
+                                    file_bytes=file_bytes,
+                                    file_name=doc.name,
+                                    part_number=doc_part_number,
+                                    api_key=api_key,
+                                    knowledge_base_id=kb_id,
+                                    custom_name=custom_name,
+                                    mime_type=mime_type,
+                                    parent_folder_id=folder_id,
+                                )
+                                
+                                results.append({
+                                    "file_name": doc.name,
+                                    "document_id": result["document_id"],
+                                    "name": result["name"],
+                                })
+                                
+                                progress_bar.progress(0.1 + (0.8 * (idx + 1) / total_files))
+                                
+                            except Exception as e:
+                                failed_uploads.append({
+                                    "file_name": doc.name,
+                                    "error": str(e),
+                                })
                         
-                        if response.status_code == 200:
-                            result = response.json()
-                            progress_bar.progress(1.0)
-                            status_text.empty()
+                        progress_bar.progress(1.0)
+                        status_text.empty()
+                        
+                        # Display results
+                        successful = len(results)
+                        failed = len(failed_uploads)
+                        
+                        if successful > 0:
+                            st.success(f"✅ Successfully uploaded {successful}/{total_files} document(s)!")
                             
-                            # Display success message
-                            successful = result.get("successful_uploads", 0)
-                            failed = result.get("failed_uploads", 0)
-                            total = result.get("total_files", 0)
-                            folder_id = result.get("folder_id")
+                            if folder_id:
+                                st.info(f"📁 Folder: Part_{doc_part_number} (ID: {folder_id})")
                             
-                            if successful > 0:
-                                st.success(f"✅ Successfully uploaded {successful}/{total} document(s)!")
-                                
-                                if folder_id:
-                                    st.info(f"📁 Folder: Part_{doc_part_number} (ID: {folder_id})")
-                                else:
-                                    st.info(f"📁 Documents uploaded (folder creation not available)")
-                                
-                                # Display successful uploads
-                                if successful > 0:
-                                    with st.expander(f"✅ Successful Uploads ({successful})", expanded=True):
-                                        for upload_result in result.get("results", []):
-                                            st.markdown(f"**{upload_result.get('file_name')}**")
-                                            st.caption(f"Document ID: {upload_result.get('document_id')}")
-                                            st.caption(f"Name: {upload_result.get('name')}")
-                                            st.divider()
+                            with st.expander(f"✅ Successful Uploads ({successful})", expanded=True):
+                                for upload_result in results:
+                                    st.markdown(f"**{upload_result.get('file_name')}**")
+                                    st.caption(f"Document ID: {upload_result.get('document_id')}")
+                                    st.caption(f"Name: {upload_result.get('name')}")
+                                    st.divider()
+                        
+                        if failed > 0:
+                            with st.expander(f"❌ Failed Uploads ({failed})", expanded=False):
+                                for failed_upload in failed_uploads:
+                                    st.error(f"**{failed_upload.get('file_name')}**")
+                                    st.caption(f"Error: {failed_upload.get('error')}")
+                                    st.divider()
+                        
+                        # Refresh documents list
+                        if "kb_documents" in st.session_state:
+                            del st.session_state.kb_documents
                             
-                            # Display failed uploads
-                            if failed > 0:
-                                with st.expander(f"❌ Failed Uploads ({failed})", expanded=False):
-                                    for failed_upload in result.get("failed", []):
-                                        st.error(f"**{failed_upload.get('file_name')}**")
-                                        st.caption(f"Error: {failed_upload.get('error')}")
-                                        st.divider()
-                            
-                            # Refresh documents list
-                            if "kb_documents" in st.session_state:
-                                del st.session_state.kb_documents
-                        else:
-                            progress_bar.empty()
-                            status_text.empty()
-                            st.error(f"Failed to upload documents: {response.text}")
                     except Exception as e:
                         progress_bar.empty()
                         status_text.empty()
