@@ -42,7 +42,8 @@ from app.elevenlabs_agent import (
     generate_ticket_summary,
 )
 from app.conversation_manager import ConversationState
-
+from app.elevenlabs_chatonly import start_text_only_conversation, anonymize_multiple_docs
+from elevenlabs import ElevenLabs
 
 app = FastAPI(title="Video Understanding API", version="0.1.0")
 logger = logging.getLogger("video_understanding_api")
@@ -258,23 +259,46 @@ async def assist_video(
         )
         # Use part_number from request if provided, otherwise from video analysis
         effective_part_number = part_number if part_number and part_number.strip() else analysis.get("part_number")
-        citations = retrieve_support_docs(queries, part_number=effective_part_number)
-
+        # citations = retrieve_support_docs(queries, part_number=effective_part_number)
         # 4) Grounded answer
+        # grounded_prompt = compose_grounded_prompt(
+        #     transcript=transcript,
+        #     analysis=analysis,
+        #     clarifying_questions=clarifying_questions,
+        #     citations=citations,
+        #     language=language,
+        #     part_number=effective_part_number,
+        # )
+        # answer = answer_with_gemini(
+        #     api_key=settings.gemini_api_key,
+        #     model=settings.gemini_answer_model,
+        #     prompt=grounded_prompt,
+        # )
+        # print("✍️ composing grounded prompt")
         grounded_prompt = compose_grounded_prompt(
             transcript=transcript,
             analysis=analysis,
             clarifying_questions=clarifying_questions,
-            citations=citations,
             language=language,
             part_number=effective_part_number,
         )
-        answer = answer_with_gemini(
-            api_key=settings.gemini_api_key,
-            model=settings.gemini_answer_model,
-            prompt=grounded_prompt,
+        if settings.elevenlabs_txt_agent_id == "":
+            raise HTTPException(status_code=400, detail="ELEVENLABS_TXT_AGENT_ID is required for text-only agent")
+        
+        agent_response = start_text_only_conversation(
+            settings.elevenlabs_api_key_write,
+            settings.elevenlabs_txt_agent_id,
+            grounded_prompt,  
         )
+        full_text = "".join(agent_response)
 
+        client = ElevenLabs(base_url="https://api.elevenlabs.io/")
+        text, doc_id = anonymize_multiple_docs(full_text, client)
+        
+        answer = {
+            "text": text,
+            "follow_up_questions": analysis.get("questions_to_confirm") or clarifying_questions,
+        }
         # 5) Generate audio from answer text
         audio_base64 = None
         audio_format = None
@@ -311,7 +335,7 @@ async def assist_video(
             "transcript": transcript,
             "user_questions": user_questions,
             "clarifying_questions": clarifying_questions,
-            "retrieval": {"citations": citations},
+            # "retrieval": {"citations": citations},
             "answer": {
                 "text": answer.get("text", ""),
                 "follow_up_questions": follow_ups,
