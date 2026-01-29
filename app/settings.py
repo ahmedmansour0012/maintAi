@@ -51,6 +51,8 @@ class Settings(BaseModel):
     
     # ElevenLabs Agent and Knowledge Base settings
     elevenlabs_agent_id: str = Field(default_factory=lambda: get_secret("ELEVENLABS_AGENT_ID", ""))
+    elevenlabs_txt_agent_id: str = Field(default_factory=lambda: get_secret("ELEVENLABS_TXT_AGENT_ID", ""))
+
     elevenlabs_knowledge_base_id: str = Field(default_factory=lambda: get_secret("ELEVENLABS_KNOWLEDGE_BASE_ID", ""))
     default_followup_mode: str = Field(default_factory=lambda: get_secret("DEFAULT_FOLLOWUP_MODE", "troubleshooting"))
     auto_sync_kb: bool = Field(default_factory=lambda: get_secret("AUTO_SYNC_KB", "false").lower() == "true")
