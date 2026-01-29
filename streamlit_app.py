@@ -13,7 +13,6 @@ from fastapi import HTTPException
 import httpx
 import streamlit as st
 import streamlit.components.v1 as components
-from elevenlabs import ElevenLabs
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -241,7 +240,7 @@ def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, 
         status.update(label="✅ Questions generated", state="complete")
     
     # Step 3: Retrieval
-    with st.status("📚 Retrieving relevant documentation...", expanded=False) as status:
+    with st.status("📚 Generating grounded answer...", expanded=False) as status:
         status.update(label="📚 Searching knowledge base...", state="running")
         queries = _build_retrieval_queries(
             appliance_type=analysis.get("appliance_type"),
@@ -274,8 +273,7 @@ def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, 
         )
         full_text = "".join(agent_response)
 
-        client = ElevenLabs(base_url="https://api.elevenlabs.io/")
-        text, doc_id = _anonymize_multiple_docs(full_text, client)
+        text, doc_id = _anonymize_multiple_docs(full_text, settings.elevenlabs_api_key_write)
         
         answer = {
             "text": text,
@@ -318,7 +316,8 @@ def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, 
         "transcript": transcript,
         "user_questions": user_questions,
         "clarifying_questions": clarifying_questions,
-        "answer": answer.get("text", ""),
+        "citations": [],  
+        "answer": answer,
         "follow_up_questions": follow_ups,
         "audio_bytes": audio_bytes,
         "audio_format": audio_format,
