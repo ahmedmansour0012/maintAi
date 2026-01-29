@@ -9,10 +9,11 @@ import json
 import logging
 import time
 from typing import Optional
-
+from fastapi import HTTPException
 import httpx
 import streamlit as st
 import streamlit.components.v1 as components
+from elevenlabs import ElevenLabs
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -51,22 +52,32 @@ def _build_retrieval_queries(*args, **kwargs):
     from app.question_generation import build_retrieval_queries
     return build_retrieval_queries(*args, **kwargs)
 
-def _retrieve_support_docs(*args, **kwargs):
-    """Lazy import for RAG retrieval. Returns empty list if ChromaDB not available."""
-    try:
-        from app.rag_orchestrator import retrieve_support_docs
-        return retrieve_support_docs(*args, **kwargs)
-    except ImportError as e:
-        logger.warning(f"RAG not available (ChromaDB/sentence-transformers not installed): {e}")
-        return []  # Return empty list if dependencies missing
-    except Exception as e:
-        logger.warning(f"RAG retrieval failed: {e}")
-        return []  # Return empty list if RAG fails
+# def _retrieve_support_docs(*args, **kwargs):
+#     """Lazy import for RAG retrieval. Returns empty list if ChromaDB not available."""
+#     try:
+#         from app.rag_orchestrator import retrieve_support_docs
+#         return retrieve_support_docs(*args, **kwargs)
+#     except ImportError as e:
+#         logger.warning(f"RAG not available (ChromaDB/sentence-transformers not installed): {e}")
+#         return []  # Return empty list if dependencies missing
+#     except Exception as e:
+#         logger.warning(f"RAG retrieval failed: {e}")
+#         return []  # Return empty list if RAG fails
 
 def _compose_grounded_prompt(*args, **kwargs):
     """Lazy import for grounded prompt composition."""
     from app.rag_orchestrator import compose_grounded_prompt
     return compose_grounded_prompt(*args, **kwargs)
+
+def _start_text_only_conversation(*args, **kwargs):
+    """Lazy import for starting text-only conversation."""
+    from app.elevenlabs_chatonly import start_text_only_conversation
+    return start_text_only_conversation(*args, **kwargs)
+
+def _anonymize_multiple_docs(*args, **kwargs):
+    """Lazy import for document anonymization."""
+    from app.elevenlabs_chatonly import anonymize_multiple_docs
+    return anonymize_multiple_docs(*args, **kwargs)
 
 def _answer_with_gemini(*args, **kwargs):
     """Lazy import for Gemini answering."""
@@ -240,25 +251,36 @@ def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, 
         )
         # Use part_number from user input if provided, otherwise from video analysis
         effective_part_number = part_number if part_number and part_number.strip() else analysis.get("part_number")
-        citations = _retrieve_support_docs(queries, part_number=effective_part_number)
-        status.update(label=f"✅ Found {len(citations)} relevant sources", state="complete")
+        # citations = _retrieve_support_docs(queries, part_number=effective_part_number)
+        # status.update(label=f"✅ Found {len(citations)} relevant sources", state="complete")
     
     # Step 4: Generate grounded answer
     with st.status("💡 Generating repair instructions...", expanded=False) as status:
-        status.update(label="💡 Generating detailed repair instructions with citations...", state="running")
+        status.update(label="💡 Generating detailed repair instructions ...", state="running")
         grounded_prompt = _compose_grounded_prompt(
             transcript=transcript,
             analysis=analysis,
             clarifying_questions=clarifying_questions,
-            citations=citations,
             language=language,
             part_number=effective_part_number,
         )
-        answer = _answer_with_gemini(
-            api_key=settings.gemini_api_key,
-            model=settings.gemini_answer_model,
-            prompt=grounded_prompt,
+        if settings.elevenlabs_txt_agent_id == "":
+            raise HTTPException(status_code=400, detail="ELEVENLABS_TXT_AGENT_ID is required for text-only agent")
+        
+        agent_response = _start_text_only_conversation(
+            settings.elevenlabs_api_key_write,
+            settings.elevenlabs_txt_agent_id,
+            grounded_prompt,  
         )
+        full_text = "".join(agent_response)
+
+        client = ElevenLabs(base_url="https://api.elevenlabs.io/")
+        text, doc_id = _anonymize_multiple_docs(full_text, client)
+        
+        answer = {
+            "text": text,
+            "follow_up_questions": analysis.get("questions_to_confirm") or clarifying_questions,
+        }
         status.update(label="✅ Repair instructions ready", state="complete")
     
     # Step 5: Generate audio from answer text
@@ -296,8 +318,7 @@ def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, 
         "transcript": transcript,
         "user_questions": user_questions,
         "clarifying_questions": clarifying_questions,
-        "citations": citations,
-        "answer": answer,
+        "answer": answer.get("text", ""),
         "follow_up_questions": follow_ups,
         "audio_bytes": audio_bytes,
         "audio_format": audio_format,
