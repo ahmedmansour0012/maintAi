@@ -100,13 +100,11 @@ def _load_prompt_template() -> str:
         "Respond in the requested language. Provide a concise, actionable plan.\n"
     )
 
-
 def compose_grounded_prompt(
     *,
     transcript: str,
     analysis: Dict[str, Any],
     clarifying_questions: List[str],
-    citations: List[Dict[str, Any]],
     language: str,
     part_number: Optional[str] = None,
 ) -> str:
@@ -114,28 +112,15 @@ def compose_grounded_prompt(
     appliance = analysis.get("appliance_type")
     brand = analysis.get("brand_or_model")
     issue = analysis.get("issue_summary")
-    # Use part_number from parameter if provided, otherwise from analysis
     part_num = part_number or analysis.get("part_number")
-
-    citations_block_lines: List[str] = []
-    for c in citations:
-        src = c.get("file") or "unknown.pdf"
-        page = c.get("page")
-        dist = c.get("distance")
-        snip = c.get("snippet") or ""
-        citations_block_lines.append(
-            f"- [{src} p.{page}] (distance={dist}): {snip}"
-        )
-    citations_block = "\n".join(citations_block_lines) if citations_block_lines else "No citations found."
 
     clarifying_block = "\n".join(f"- {q}" for q in clarifying_questions) if clarifying_questions else "None."
 
-    # Add note about part number if it was predicted vs extracted
     part_num_note = ""
     if part_num:
         part_source = analysis.get("part_number_source", "unknown")
         if part_source == "predicted":
-            part_num_note = " (predicted - not visible in video, but used to filter relevant documentation)"
+            part_num_note = " (predicted - not visible in video, but used for context)"
         elif part_source == "extracted":
             part_num_note = " (extracted from video/image)"
 
@@ -150,15 +135,72 @@ def compose_grounded_prompt(
         f"{_truncate(transcript, 4000)}\n\n"
         "ClarifyingQuestions (ask only if needed and not already answered):\n"
         f"{clarifying_block}\n\n"
-        "Citations:\n"
-        f"{citations_block}\n\n"
         "Instructions:\n"
-        "- Base every technical claim on the citations. If unclear, state uncertainty.\n"
+        "- Base every technical claim on the knowledge base. If unclear, state uncertainty.\n"
         "- Provide a safe, step-by-step troubleshooting plan tailored to this brand/model.\n"
-        "- Include required tools/parts from citations when available.\n"
+        "- Include required tools/parts from knowledge base when available.\n"
         "- Keep it concise and practical.\n"
     )
     return prompt
+
+
+# def compose_grounded_prompt(
+#     *,
+#     transcript: str,
+#     analysis: Dict[str, Any],
+#     clarifying_questions: List[str],
+#     citations: List[Dict[str, Any]],
+#     language: str,
+#     part_number: Optional[str] = None,
+# ) -> str:
+#     tmpl = _load_prompt_template()
+#     appliance = analysis.get("appliance_type")
+#     brand = analysis.get("brand_or_model")
+#     issue = analysis.get("issue_summary")
+#     # Use part_number from parameter if provided, otherwise from analysis
+#     part_num = part_number or analysis.get("part_number")
+
+#     # citations_block_lines: List[str] = []
+#     for c in citations:
+#         src = c.get("file") or "unknown.pdf"
+#         page = c.get("page")
+#         dist = c.get("distance")
+#         snip = c.get("snippet") or ""
+#     #     citations_block_lines.append(
+#     #         f"- [{src} p.{page}] (distance={dist}): {snip}"
+#     #     )
+#     # citations_block = "\n".join(citations_block_lines) if citations_block_lines else "No citations found."
+
+#     clarifying_block = "\n".join(f"- {q}" for q in clarifying_questions) if clarifying_questions else "None."
+
+#     # Add note about part number if it was predicted vs extracted
+#     part_num_note = ""
+#     if part_num:
+#         part_source = analysis.get("part_number_source", "unknown")
+#         if part_source == "predicted":
+#             part_num_note = " (predicted - not visible in video, but used to filter relevant documentation)"
+#         elif part_source == "extracted":
+#             part_num_note = " (extracted from video/image)"
+
+#     prompt = (
+#         f"{tmpl}\n\n"
+#         f"Language: {language}\n"
+#         f"Appliance: {appliance}\n"
+#         f"Brand/Model: {brand}\n"
+#         f"Part Number: {part_num}{part_num_note}\n"
+#         f"Issue summary: {issue}\n\n"
+#         "Transcript (verbatim, may be noisy):\n"
+#         f"{_truncate(transcript, 4000)}\n\n"
+#         "ClarifyingQuestions (ask only if needed and not already answered):\n"
+#         "Citations:\n"
+#         # f"{citations_block}\n\n"
+#         "Instructions:\n"
+#         "- Base every technical claim on the citations. If unclear, state uncertainty.\n"
+#         "- Provide a safe, step-by-step troubleshooting plan tailored to this brand/model.\n"
+#         "- Include required tools/parts from citations when available.\n"
+#         "- Keep it concise and practical.\n"
+#     )
+#     return prompt
 
 
 def answer_with_gemini(
