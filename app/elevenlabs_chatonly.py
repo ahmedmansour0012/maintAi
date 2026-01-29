@@ -7,6 +7,7 @@ from elevenlabs.conversational_ai.conversation import (
 )
 import time
 import re
+from elevenlabs import ElevenLabs
 
 
 def wait_for_ws(conversation, timeout=10):
@@ -34,7 +35,9 @@ class NoOpAudioInterface(DefaultAudioInterface):
         pass
 
 
-def anonymize_multiple_docs(text, client):
+def anonymize_multiple_docs(text, api_key):
+    client = ElevenLabs(api_key=api_key,
+        base_url="https://api.elevenlabs.io/")
     # Find all unique Document IDs to avoid redundant API calls
     doc_ids = list(set(re.findall(r'Document:\s*(\S+)', text)))
     
@@ -47,22 +50,15 @@ def anonymize_multiple_docs(text, client):
             replacement = f"{folder_name}/{doc_name}"
         except Exception:
             # Fallback if the document isn't found or API fails
-            replacement = "Unknown/PrivateDoc"
+            replacement = f"DOCUMENT_ID: {doc_id}"
 
         # Use re.escape on doc_id to ensure special characters don't break the regex
         # We target ONLY the specific doc_id currently in the loop
         pattern = r'Document:\s*' + re.escape(doc_id)
         text = re.sub(pattern, f"Document: {replacement}", text)
-    
+        print(f"Anonymized Document ID {doc_id} to {replacement}")
     return text, doc_ids
 
-from elevenlabs.client import ElevenLabs
-from elevenlabs.conversational_ai.conversation import (
-    Conversation,
-    ConversationInitiationData,
-    AgentChatResponsePartType,
-)
-import time
 
 def start_text_only_conversation(api_key: str, agent_id: str, initial_message: str):
     transcr = []
