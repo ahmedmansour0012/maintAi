@@ -593,7 +593,8 @@ def main():
                     from app.elevenlabs_agent import build_video_context_text
 
                     video_context = build_video_context_text(video_analysis=analysis, language=language)
-                    dynamic_vars = {"video_context": video_context}
+                    dynamic_vars = {"video_context": video_context, "part_number": analysis.get("part_number") or "",
+                                    "appliance_type": analysis.get("appliance_type") or "", "brand_or_model": analysis.get("brand_or_model") or ""}
                     # Escape to keep the HTML attribute safe even if transcript contains quotes/newlines.
                     dynamic_vars_attr = html.escape(
                         json.dumps(dynamic_vars, ensure_ascii=False),
