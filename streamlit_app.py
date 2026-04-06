@@ -593,7 +593,16 @@ def main():
                     from app.elevenlabs_agent import build_video_context_text
 
                     video_context = build_video_context_text(video_analysis=analysis, language=language)
-                    dynamic_vars = {"video_context": video_context, 'tool_call_status': "False"}  # tool_call_status can be updated by the Agent via JS SDK when it calls tools, allowing the UI to react to tool calls in real-time if desired
+                    dynamic_vars = {
+                        "video_context": video_context,
+                        "Customer_number": "",
+                        "name": "test",
+                        "phone": "test",
+                        "email": "test",
+                        "office_address": "test",
+                        "tool_call_status": False
+                    }
+                    # dynamic_vars = {"video_context": video_context, 'tool_call_status': "False"}  # tool_call_status can be updated by the Agent via JS SDK when it calls tools, allowing the UI to react to tool calls in real-time if desired
                     # dynamic_vars = {"video_context": video_context, "part_number": analysis.get("part_number") or "",
                                     # "appliance_type": analysis.get("appliance_type") or "", "brand_or_model": analysis.get("brand_or_model") or ""}
                     # Escape to keep the HTML attribute safe even if transcript contains quotes/newlines.
