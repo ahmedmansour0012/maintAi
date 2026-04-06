@@ -600,7 +600,7 @@ def main():
                         "phone": "test",
                         "email": "test",
                         "office_address": "test",
-                        "tool_call_status": False
+                        "tool_call_status": 'False'
                     }
                     # dynamic_vars = {"video_context": video_context, 'tool_call_status': "False"}  # tool_call_status can be updated by the Agent via JS SDK when it calls tools, allowing the UI to react to tool calls in real-time if desired
                     # dynamic_vars = {"video_context": video_context, "part_number": analysis.get("part_number") or "",
