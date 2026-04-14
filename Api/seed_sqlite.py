@@ -36,7 +36,7 @@ try:
     # -------------------------
     contact1 = CustomerServiceContact(
         subcontractor_id=rinnai.id,
-        phone_number_e164="+18006219415",
+        phone_number_e164="+19707363821",
         email="support@rinnai.us",
         operating_hours="Mon-Fri 8am-5pm",
         language="en",
