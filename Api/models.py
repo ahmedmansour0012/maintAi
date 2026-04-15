@@ -147,6 +147,7 @@ class Appointment(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     subcontractor_id: Mapped[int] = mapped_column(ForeignKey("subcontractors.id"), nullable=False, index=True)
     service_location_id: Mapped[int] = mapped_column(ForeignKey("service_locations.id"), nullable=False, index=True)
+    part_number_id: Mapped[int | None] = mapped_column(ForeignKey("part_numbers.id"), nullable=True, index=True)
 
     user_full_name: Mapped[str] = mapped_column(String(150), nullable=False)
     user_phone_e164: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -167,6 +168,7 @@ class Appointment(Base):
 
     subcontractor: Mapped["Subcontractor"] = relationship(back_populates="appointments")
     service_location: Mapped["ServiceLocation"] = relationship(back_populates="appointments")
+    part_number: Mapped["PartNumber | None"] = relationship()
     escalation_logs: Mapped[list["EscalationLog"]] = relationship(
         back_populates="appointment", cascade="all, delete-orphan"
     )
