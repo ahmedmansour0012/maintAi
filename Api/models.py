@@ -135,7 +135,6 @@ class ServiceLocation(Base):
     )
 
     subcontractor: Mapped["Subcontractor"] = relationship(back_populates="service_locations")
-    appointments: Mapped[list["Appointment"]] = relationship(back_populates="service_location")
 
 
 # --------------------
@@ -146,12 +145,19 @@ class Appointment(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     subcontractor_id: Mapped[int] = mapped_column(ForeignKey("subcontractors.id"), nullable=False, index=True)
-    service_location_id: Mapped[int] = mapped_column(ForeignKey("service_locations.id"), nullable=False, index=True)
     part_number_id: Mapped[int | None] = mapped_column(ForeignKey("part_numbers.id"), nullable=True, index=True)
 
     user_full_name: Mapped[str] = mapped_column(String(150), nullable=False)
     user_phone_e164: Mapped[str] = mapped_column(String(20), nullable=False)
     user_email: Mapped[str | None] = mapped_column(String(254))
+
+    # Location the technician will visit (customer's address)
+    visit_address_line_1: Mapped[str] = mapped_column(String(255), nullable=False)
+    visit_address_line_2: Mapped[str | None] = mapped_column(String(255))
+    visit_city: Mapped[str] = mapped_column(String(120), nullable=False)
+    visit_state: Mapped[str | None] = mapped_column(String(120))
+    visit_postal_code: Mapped[str | None] = mapped_column(String(30))
+    visit_country: Mapped[str] = mapped_column(String(120), nullable=False, default="US")
 
     issue_summary: Mapped[str] = mapped_column(Text, nullable=False)
     scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
@@ -167,7 +173,6 @@ class Appointment(Base):
     )
 
     subcontractor: Mapped["Subcontractor"] = relationship(back_populates="appointments")
-    service_location: Mapped["ServiceLocation"] = relationship(back_populates="appointments")
     part_number: Mapped["PartNumber | None"] = relationship()
     escalation_logs: Mapped[list["EscalationLog"]] = relationship(
         back_populates="appointment", cascade="all, delete-orphan"
