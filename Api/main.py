@@ -41,7 +41,7 @@ class PartNumberIn(BaseModel):
 
 class AppointmentIn(BaseModel):
     subcontractor_id: int
-    part_number_id: int | None = None
+    part_number: str | None = Field(default=None, max_length=120)
 
     # Customer details
     user_full_name: str = Field(min_length=1, max_length=150)
@@ -214,14 +214,18 @@ def create_appointment(payload: AppointmentIn, db: Session = Depends(get_db)) ->
     if not db.get(Subcontractor, payload.subcontractor_id):
         raise HTTPException(status_code=404, detail="Subcontractor not found")
 
-    if payload.part_number_id is not None:
-        part = db.get(PartNumber, payload.part_number_id)
+    part_number_id: int | None = None
+    if payload.part_number is not None:
+        part = db.scalar(select(PartNumber).where(PartNumber.part_number == payload.part_number))
         if not part:
             raise HTTPException(status_code=404, detail="Part number not found")
         if part.subcontractor_id != payload.subcontractor_id:
             raise HTTPException(status_code=400, detail="Part number does not belong to the given subcontractor")
+        part_number_id = part.id
 
-    row = Appointment(**payload.model_dump())
+    data = payload.model_dump(exclude={"part_number"})
+    data["part_number_id"] = part_number_id
+    row = Appointment(**data)
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -245,6 +249,50 @@ def create_appointment(payload: AppointmentIn, db: Session = Depends(get_db)) ->
         "part_number": row.part_number.part_number if row.part_number else None,
         "created_at": row.created_at,
     }
+
+
+# --------------------
+# LIST APPOINTMENTS
+# --------------------
+@app.get("/appointments", dependencies=[Depends(require_key)])
+def list_appointments(
+    subcontractor_id: int | None = None,
+    status: str | None = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+) -> list:
+    query = db.query(Appointment)
+    if subcontractor_id is not None:
+        query = query.filter(Appointment.subcontractor_id == subcontractor_id)
+    if status is not None:
+        query = query.filter(Appointment.status == status)
+    rows = query.offset(skip).limit(limit).all()
+    return [
+        {
+            "id": row.id,
+            "subcontractor_id": row.subcontractor_id,
+            "user_full_name": row.user_full_name,
+            "user_phone_e164": row.user_phone_e164,
+            "user_email": row.user_email,
+            "visit_location": {
+                "address_line_1": row.visit_address_line_1,
+                "address_line_2": row.visit_address_line_2,
+                "city": row.visit_city,
+                "state": row.visit_state,
+                "postal_code": row.visit_postal_code,
+                "country": row.visit_country,
+            },
+            "scheduled_at": row.scheduled_at,
+            "issue_summary": row.issue_summary,
+            "trigger_reason": row.trigger_reason,
+            "status": row.status,
+            "part_number": row.part_number.part_number if row.part_number else None,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+        }
+        for row in rows
+    ]
 
 
 # --------------------

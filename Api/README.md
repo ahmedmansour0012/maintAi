@@ -123,7 +123,7 @@ Body:
 ```json
 {
   "subcontractor_id": 1,
-  "part_number_id": null,
+  "part_number": null,
   "user_full_name": "Jane Doe",
   "user_phone_e164": "+18005559876",
   "user_email": "jane@example.com",
@@ -163,6 +163,23 @@ Returns:
   "created_at": "2026-04-16T08:00:00Z"
 }
 ```
+
+### List appointments
+
+`GET /appointments`
+
+Optional query parameters:
+
+| Parameter | Type | Description |
+|---|---|---|
+| `subcontractor_id` | int | Filter by subcontractor |
+| `status` | string | Filter by status (e.g. `pending`) |
+| `skip` | int | Offset for pagination (default: `0`) |
+| `limit` | int | Max results to return (default: `100`) |
+
+Returns an array of appointment objects (same shape as Get appointment below).
+
+---
 
 ### Get appointment
 
