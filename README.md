@@ -2,7 +2,7 @@
 
 Streamlit app that analyzes appliance videos/images with Gemini AI and delivers repair instructions via ElevenLabs voice and text agents.
 
-> **Backend API (subcontractor & appointment lookup):** see [Api/README.md](Api/README.md)
+> **Backend API (subcontractor & appointment lookup):** see [Api/README.md](Api/README.md) For setup and usage
 
 ---
 
