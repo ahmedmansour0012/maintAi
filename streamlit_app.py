@@ -9,17 +9,11 @@ import json
 import logging
 import time
 from typing import Optional
-from fastapi import HTTPException
-import httpx
 import streamlit as st
 import streamlit.components.v1 as components
 
 # Configure logging
 logger = logging.getLogger(__name__)
-
-# Lazy imports to avoid loading heavy modules at startup
-# These will be imported when first needed
-_lazy_modules = {}
 
 def _get_settings():
     """Lazy import for settings."""
@@ -30,11 +24,6 @@ def _analyze_video_with_gemini(*args, **kwargs):
     """Lazy import for Gemini video analysis."""
     from app.gemini_video_understanding import analyze_video_with_gemini
     return analyze_video_with_gemini(*args, **kwargs)
-
-def _get_gemini_api_error():
-    """Lazy import for GeminiAPIError."""
-    from app.gemini_video_understanding import GeminiAPIError
-    return GeminiAPIError
 
 def _extract_user_questions(*args, **kwargs):
     """Lazy import for question extraction."""
@@ -50,18 +39,6 @@ def _build_retrieval_queries(*args, **kwargs):
     """Lazy import for retrieval queries."""
     from app.question_generation import build_retrieval_queries
     return build_retrieval_queries(*args, **kwargs)
-
-# def _retrieve_support_docs(*args, **kwargs):
-#     """Lazy import for RAG retrieval. Returns empty list if ChromaDB not available."""
-#     try:
-#         from app.rag_orchestrator import retrieve_support_docs
-#         return retrieve_support_docs(*args, **kwargs)
-#     except ImportError as e:
-#         logger.warning(f"RAG not available (ChromaDB/sentence-transformers not installed): {e}")
-#         return []  # Return empty list if dependencies missing
-#     except Exception as e:
-#         logger.warning(f"RAG retrieval failed: {e}")
-#         return []  # Return empty list if RAG fails
 
 def _compose_grounded_prompt(*args, **kwargs):
     """Lazy import for grounded prompt composition."""
@@ -88,27 +65,10 @@ def _text_to_speech_wav(*args, **kwargs):
     from app.elevenlabs_tts import text_to_speech_wav
     return text_to_speech_wav(*args, **kwargs)
 
-def _get_elevenlabs_tts_error():
-    """Lazy import for ElevenLabsTTSError."""
-    from app.elevenlabs_tts import ElevenLabsTTSError
-    return ElevenLabsTTSError
-
-def _get_video_errors():
-    """Lazy import for video errors."""
-    from app.video_io import VideoDownloadError, VideoTooLargeError
-    return VideoDownloadError, VideoTooLargeError
-
 def _download_video(*args, **kwargs):
     """Lazy import for video download."""
     from app.video_io import download_video
     return download_video(*args, **kwargs)
-
-def _get_elevenlabs_agent_error():
-    """Lazy import for ElevenLabsAgentError."""
-    from app.elevenlabs_agent import ElevenLabsAgentError
-    return ElevenLabsAgentError
-
-# Aliases for compatibility (these are now handled via lazy imports)
 
 # Page configuration
 st.set_page_config(
@@ -250,8 +210,6 @@ def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, 
         )
         # Use part_number from user input if provided, otherwise from video analysis
         effective_part_number = part_number if part_number and part_number.strip() else analysis.get("part_number")
-        # citations = _retrieve_support_docs(queries, part_number=effective_part_number)
-        # status.update(label=f"✅ Found {len(citations)} relevant sources", state="complete")
     
     # Step 4: Generate grounded answer
     with st.status("💡 Generating repair instructions...", expanded=False) as status:
@@ -264,7 +222,7 @@ def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, 
             part_number=effective_part_number,
         )
         if settings.elevenlabs_txt_agent_id == "":
-            raise HTTPException(status_code=400, detail="ELEVENLABS_TXT_AGENT_ID is required for text-only agent")
+            raise ValueError("ELEVENLABS_TXT_AGENT_ID is required for text-only agent")
         
         agent_response = _start_text_only_conversation(
             settings.elevenlabs_api_key_write,
@@ -304,9 +262,6 @@ def process_video_assistance(media_bytes: bytes, mime_type: str, language: str, 
                     logger.warning(f"ElevenLabs TTS error: {str(e)}")
                 else:
                     raise
-            except Exception as e:
-                status.update(label=f"⚠️ Audio generation error: {str(e)}", state="error")
-                logger.warning(f"Unexpected TTS error: {str(e)}")
     
     # Prepare follow-up questions
     follow_ups = analysis.get("questions_to_confirm") or clarifying_questions
@@ -605,9 +560,6 @@ def main():
                          "appliance_type": analysis.get("appliance_type") or "",
                          "part_number": analysis.get("part_number") or "",
                     }
-                    # dynamic_vars = {"video_context": video_context, 'tool_call_status': "False"}  # tool_call_status can be updated by the Agent via JS SDK when it calls tools, allowing the UI to react to tool calls in real-time if desired
-                    # dynamic_vars = {"video_context": video_context, "part_number": analysis.get("part_number") or "",
-                                    # "appliance_type": analysis.get("appliance_type") or "", "brand_or_model": analysis.get("brand_or_model") or ""}
                     # Escape to keep the HTML attribute safe even if transcript contains quotes/newlines.
                     dynamic_vars_attr = html.escape(
                         json.dumps(dynamic_vars, ensure_ascii=False),
@@ -1006,9 +958,7 @@ def main():
                         st.error(f"Error uploading documents: {str(e)}")
                         st.exception(e)
     
-    # Footer
     st.divider()
-    # st.caption("Powered by Gemini AI • Built with Streamlit • RAG-powered repair assistance")
 
 
 if __name__ == "__main__":
