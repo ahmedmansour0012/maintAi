@@ -32,6 +32,12 @@ streamlit run streamlit_app.py
 
 Opens at `http://localhost:8501`. For a public URL use ngrok: `ngrok http 8501`
 
+> **PyAudio on Windows:** if `pip install "elevenlabs[pyaudio]"` fails, install from a pre-built wheel instead:
+> ```cmd
+> pip install https://download.lfd.uci.edu/pythonlibs/archived/PyAudio-0.2.14-cp311-cp311-win_amd64.whl
+> ```
+> (Use `win32` instead of `win_amd64` if your Python is 32-bit. Or skip it entirely if you don't need local microphone input — the browser voice widget works without it.)
+
 ---
 
 ## Features
